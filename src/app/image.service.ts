@@ -12,6 +12,7 @@ export class ImageService {
   directory = new BehaviorSubject<string[]>([]);
 
   constructor() {
+    console.log('constructor', {electron: electron, require: windowAny.require});
     electron?.ipcRenderer?.on('getImagesResponse', (event: any, images: any) => {
       this.images.next(images);
     });

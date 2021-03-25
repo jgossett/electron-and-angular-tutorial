@@ -1,27 +1,27 @@
 const {app, BrowserWindow, ipcMain} = require('electron');
 const path = require('path');
-const url = require('url');
 const fs = require('fs');
 
 let win;
-const re = /(?:\.([^.]+))?$/;
+const IMAGE_EXTENSIONS = ['.jpg', '.png'];
 
 function createWindow() {
-  win = new BrowserWindow({width: 800, height: 600});
-
-  win.loadURL(
-    url.format({
-      pathname: path.join(__dirname, `/../../dist/ImageBrowser/index.html`),
-      protocol: 'file:',
-      slashes: true
-    })
-  );
+  win = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    }
+  });
 
   win.webContents.openDevTools();
-
   win.on('closed', () => {
     win = null;
   });
+
+  const filePath = path.join(__dirname, `/../../dist/ImageBrowser/index.html`);
+  win.loadFile(filePath);
 }
 
 app.on('ready', createWindow);
@@ -41,36 +41,41 @@ app.on('window-all-closed', () => {
   }
 });
 
-function getImages() {
-  const cwd = process.cwd();
-  fs.readdir('.', {withFileTypes: true}, (err, files) => {
-    if (err) {
-      return;
-    }
+async function getImages() {
+  const applicationFolderPath = process.cwd();
 
-    const images = files
-      .filter(file => file.isFile() && ['jpg', 'png'].includes(re.exec(file.name)[1]))
-      .map(file => `file://${cwd}/${file.name}`);
-    win?.webContents.send('getImagesResponse', images);
-  });
+  const files = await fs.promises.readdir(applicationFolderPath, {withFileTypes: true})
+  const imagePaths = files
+    // filter out folders.
+    .filter(_ => _.isFile())
+    // filter out non image files.
+    .filter(_ => {
+      const fileExtension = path.extname(_.name)
+      return IMAGE_EXTENSIONS.includes(fileExtension.toLowerCase());
+    })
+    // convert to path.
+    .map(_ => {
+      return `file://${applicationFolderPath}/${_.name}`;
+    });
+
+  win?.webContents.send('getImagesResponse', imagePaths);
 }
 
 function isRoot() {
   return path.parse(process.cwd()).root === process.cwd();
 }
 
-function getDirectory() {
-  fs.readdir('.', {withFileTypes: true}, (err, files) => {
-    if (!err) {
-      const directories = files
-        .filter(file => file.isDirectory())
-        .map(file => file.name);
-      if (!isRoot()) {
-        directories.unshift('..');
-      }
-      win?.webContents.send('getDirectoryResponse', directories);
-    }
-  });
+async function getDirectory() {
+  const files = await fs.promises.readdir('.', {withFileTypes: true})
+  const directories = files
+    .filter(file => file.isDirectory())
+    .map(file => file.name);
+
+  if (!isRoot()) {
+    directories.unshift('..');
+  }
+
+  win?.webContents.send('getDirectoryResponse', directories);
 }
 
 ipcMain.on('navigateDirectory', (event, directoryPath) => {
