@@ -1,0 +1,2 @@
+2021-03-25 Extract electron application in new folder.
+2021-03-25 Convert `src\electron\main.js` into Typescript.
